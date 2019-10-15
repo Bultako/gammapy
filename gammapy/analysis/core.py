@@ -26,7 +26,8 @@ __all__ = ["Analysis"]
 log = logging.getLogger(__name__)
 
 
-class Analysis(metaclass=LogProv):
+@provenance
+class Analysis:
     """Config-driven high-level analysis interface.
 
     It is initialized by default with a set of configuration parameters and values declared in
