@@ -130,7 +130,6 @@ class Analysis:
             self._spectrum_extraction()
         else:  # 3d
             self._map_making()
-            return self
         else:
             ValueError(f"Invalid dataset type: {self.config.datasets.type}")
 
@@ -183,7 +182,6 @@ class Analysis:
         self.fit = Fit(self.datasets)
         self.fit_result = self.fit.run(optimize_opts=optimize_opts)
         log.info(self.fit_result)
-        return self
 
     def get_flux_points(self):
         """Calculate flux points for a specific model component."""
@@ -203,7 +201,6 @@ class Analysis:
         )
         cols = ["e_ref", "ref_flux", "dnde", "dnde_ul", "dnde_err", "is_ul"]
         log.info("\n{}".format(self.flux_points.data.table[cols]))
-        return self
 
     def update_config(self, config):
         self.config = self.config.update(config=config)
