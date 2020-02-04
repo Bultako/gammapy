@@ -32,7 +32,7 @@ def provlist2provdoc(provlist):
                     "prov:label": provdict.pop("name"),
                     "prov:type": "ExecutionSession",
                     "prov:generatedAtTime": provdict.pop("startTime"),
-                    'configFile': provdict.pop('configFile'),
+                    # 'configFile': provdict.pop('configFile'),
                     'system': str(provdict.pop('system'))[:50],
                 }
             )

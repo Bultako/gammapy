@@ -51,7 +51,6 @@ SUPPORTED_HASH_TYPE = "md5"
 sessions = []
 traced_entities = {}
 
-
 def setup_logging():
     """Setup logging configuration."""
 
@@ -310,7 +309,6 @@ def log_session(class_instance, start):
             "session_id": session_id,
             "name": session_name,
             "startTime": start,
-            "configFile": class_instance.config.filename,
             "system": system,
         }
         log_prov_info(log_record)
@@ -499,6 +497,7 @@ def log_progenitors(entity_id, subitem, class_instance):
 def log_file_generation(file_path, entity_name="", used=[], role="", activity_name=""):
     # get file properties
     if os.path.isfile(file_path):
+        method = get_hash_method()
         item = dict(
             file_path=file_path,
             entityName=entity_name,
@@ -509,7 +508,7 @@ def log_file_generation(file_path, entity_name="", used=[], role="", activity_na
             "name": entity_name,
             "location": file_path,
             "hash": entity_id,
-            "hash_type": HASH_TYPE,
+            "hash_type": method,
         }
         log_prov_info(log_record)
         if activity_name:

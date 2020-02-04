@@ -55,59 +55,71 @@ activities:
 
     get_observations:
         description:
-            "Fetch observations from the data store according
-            to criteria defined in the configuration"
+            "Fetch observations from datastore and list of identifiers filtering by optional spatial/temporal criteria."
         parameters:
             - name: datastore_path
-              description: "DataStore path as string"
-              value: settings.observations.datastore
-            - name: filters
-              description: "Filter criteria to select observations"
-              value: settings.observations.filters
+              description: "DataStore file path as string"
+              value: config.observations.datastore.__str__()
+            - name: obslist_path
+              description: "Observations list file path as string"
+              value: config.observations.obs_file
+            - name: obs_ids
+              description: "Observations list of identifiers"
+              value: config.observations.obs_ids
+            - name: obs_cone
+              description: "Conesearch criteria to select observations"
+              value: config.observations.obs_cone.json()
+            - name: obs_time
+              description: "Time criteria to select observations"
+              value: config.observations.obs_time.json()
         usage:
             - role: datastore
               description: "DataStore object file"
               entityName: DataStore
-              value: settings.observations.datastore
+              value: config.observations.datastore
+            - role: obslist_file
+              description: "Observations list file"
+              entityName: DataStore
+              value: config.observations.obs_file
         generation:
             - role: observations_selected
               description: "Observations selected"
               entityName: Observations
               value: observations
               has_members:
-                  list: observations.list
+                  list: observations._observations
                   entityName: Observation
                   id: obs_id
-                  location: location(hdu_type="events").path().__str__()
+                  location: _events_hdu.base_dir
                   namespace: gamma-events
 
     get_datasets:
         description: "Produce reduced datasets"
         parameters:
-            - name: stack-datasets
+            - name: stack
               description: "Stack datasets flag"
-              value: settings.datasets.stack-datasets
+              value: config.datasets.stack
             - name: dataset-type
               description: "Datasets type"
-              value: settings.datasets.dataset-type
+              value: config.datasets.type.json()
             - name: geom
               description: "Geometry parameters"
-              value: settings.datasets.geom
-            - name: geom-irf
-              description: "Geometry parameters in IRFs"
-              value: settings.datasets.geom-irf
+              value: config.datasets.geom.json()
+            - name: maps
+              description: "Maps selected"
+              value: config.datasets.map_selection.json()
             - name: background
               description: "Background parameters"
-              value: settings.datasets.background
+              value: config.datasets.background.json()
+            - name: safe-mask
+              description: "Safe mask applied"
+              value: config.datasets.safe_mask.json()
+            - name: on-region
+              description: "On region"
+              value: config.datasets.on_region.json()
             - name: containment_correction
               description: "Containment_correction used in spectrum extraction"
-              value: settings.datasets.containment_correction
-            - name: offset-max
-              description: "Max offset to produce the dataset cutout"
-              value: settings.datasets.offset-max
-            - name: psf-kernel-radius
-              description: "Radius of PSF kernel used"
-              value: settings.datasets.psf-kernel-radius
+              value: config.datasets.containment_correction
         usage:
             - role: observations_selected
               description: "Observations selected"
@@ -116,67 +128,67 @@ activities:
             - role: exclusion_mask
               description: "Exclusion mask for spectral background estimation"
               entityName: Mask
-              location: settings.datasets.background.exclusion_mask.filename
+              location: config.datasets.background.exclusion
         generation:
             - role: reduced_datasets
               description: "Datasets produced in the reduction process"
               entityName: Datasets
               value: datasets
-# TODO handle name properties in gammapy
               has_members:
-                  list: datasets
+                  list: datasets._datasets
                   entityName: Dataset
                   id: name
-#                  id: __hash__().__abs__()
-#              has_progenitors:
-#                  entityName: Observations
-#                  value: observations
-
-
-    set_model:
-        description:
-            "Read the model from dict or filename
-            and attach it to datasets"
+              has_progenitors:
+                  entityName: Observations
+                  value: observations
+    read_models:
+        description: "Read and set models from filename"
         parameters:
-            - name: model
-              description: "Model description in YAML format as string"
-              value: kwargs.model
             - name: filename
-              description: "Filename and path with the YAML model description"
-              value: kwargs.filename
+              description: "File path with the YAML model description"
+              value: kwargs.path
         usage:
-            - role: model_file
-              entityName: YAMLFile
-              location: kwargs.filename
-            - role: reduced_datasets
-              description: "Datasets produced in the reduction process"
-              entityName: Datasets
-              value: datasets
         generation:
-            - role: initial_model
-              description: "Parametric composed model"
-              entityName: SkyModel
-              value: model
-#           TODO this is a derived dataset
-            - role: datasets_with_initial_model
-              description: "Datasets with initial model"
-              entityName: Datasets
-              value: datasets
+            - role: initial_models
+              description: "Parametric composed models"
+              entityName: Models
+              value: models
+
+    set_models:
+        description:
+            "Read the model from YAML string or model instance"
+        parameters:
+            - name: models
+              description: "Models to set"
+              value: kwargs.models
+        usage:
+            - role: model_read
+              entityName: Models
+              location: models
+        generation:
+            - role: initial_models
+              description: "Parametric composed models"
+              entityName: Models
+              value: models
 
     run_fit:
         description: "Fitting reduced data sets to model"
         parameters:
             - name: fit_range
               description: "Energy range where to perform the fit"
-              value: settings.fit.fit_range
+              value: config.fit.fit_range.json()
             - name: optimize_opts
               description: "Options passed to `Fit.optimize`."
               value: kwargs.optimize_opts
         usage:
             - role: datasets
-              description: "Datasets with initial model"
+              description: "Datasets produced"
               entityName: Datasets
               value: datasets
+            - role: initial_models
+              description: "Parametric composed models"
+              entityName: Models
+              value: models
         generation:
             - role: fit_object
               description: "Object that stores fitting parameters"
@@ -186,27 +198,29 @@ activities:
               description: "Object that stores fitting results parameters"
               entityName: FitResult
               value: fit_result
-#           TODO this is a derived model
+            # TODO this is a derived model
             - role: fitted_model
-              description: "Parametric composed model fitted on datasets"
-              entityName: SkyModel
-              value: model
-#           TODO this is a derived dataset
-            - role: datasets_with_fitted_model
-              description: "Datasets fitted to model"
-              entityName: Datasets
-              value: datasets
+              description: "Parametric composed models fitted on datasets"
+              entityName: Models
+              value: models
 
     get_flux_points:
         description: "Calculate flux points"
         parameters:
             - name: source
               description: "Source name parameter in the model component"
-              value: args.source
+              value: config.flux_points.source
             - name: fp_binning
               description: "Energy binning"
-              value: settings.flux-points.fp_binning
+              value: config.flux_points.energy.json()
+            - name: fp_params
+              description: "Flux points parameters"
+              value: config.flux_points.params
         usage:
+            - role: fitted_model
+              description: "Parametric composed models fitted on datasets"
+              entityName: Models
+              value: model
             - role: datasets
               description: "Datasets with fitted model where to calculate the flux points"
               entityName: Datasets
@@ -214,7 +228,7 @@ activities:
             - role: fitted_model
               description: "Parametric composed model"
               entityName: SkyModel
-              value: model
+              value: models
         generation:
             - role: flux_points_dataset
               description: "Calculated flux points dataset"
@@ -230,26 +244,26 @@ entities:
         docurl: https://docs.gammapy.org/dev/api/gammapy.data.DataStore
         type: FileCollection
         index: "obs-index.fits.gz"
-    Observations:
-        description: "A list of observations"
-        docurl: https://docs.gammapy.org/dev/api/gammapy.data.Observations
-        type: PythonObject
     Observation:
         description: "An observation from the DataStore with a unique obs_id"
         docurl: https://docs.gammapy.org/dev/api/gammapy.data.DataStoreObservation
         type: File
         contentType: application/fits
-    Datasets:
-        description: "A list of datasets"
-        docurl: https://docs.gammapy.org/dev/api/gammapy.modeling.Datasets
+    Observations:
+        description: "A list of observations"
+        docurl: https://docs.gammapy.org/dev/api/gammapy.data.Observations
         type: PythonObject
     Dataset:
-        description: "A dataset: spectrum, map or flux-points"
+        description: "A Dataset (i.e. spectrum, map)"
         docurl: https://docs.gammapy.org/dev/api/gammapy.modeling.Dataset
         type: PythonObject
-    SkyModel:
+    Datasets:
+        description: "A list of datasets (i.e. spectrum, map)"
+        docurl: https://docs.gammapy.org/dev/api/gammapy.modeling.Datasets
+        type: PythonObject
+    Models:
         description: "A generic SkyModel"
-        docurl: https://docs.gammapy.org/dev/api/gammapy.modeling.models.SkyModelBase
+        docurl: https://docs.gammapy.org/dev/api/gammapy.modeling.models.Models
         type: PythonObject
     Fit:
         description: "A Fit object"
@@ -263,15 +277,15 @@ entities:
         description: "A FluxPointsDataset object"
         docurl: https://docs.gammapy.org/dev/api/gammapy.spectrum.FluxPointsDataset
         type: PythonObject
-    Mask:
-        description: "A 2D or 3D mask as FITS file"
-        type: File
-        contentType: application/fits
     File:
         description: "A File on the disk"
         type: File
     FITSFile:
         description: "A FITS File on the disk"
+        type: File
+        contentType: application/fits
+    Mask:
+        description: "A 2D or 3D mask as FITS file"
         type: File
         contentType: application/fits
     YAMLFile:

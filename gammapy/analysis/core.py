@@ -20,6 +20,7 @@ from gammapy.maps import Map, MapAxis, WcsGeom
 from gammapy.modeling import Fit
 from gammapy.modeling.models import BackgroundModel, Models
 from gammapy.utils.scripts import make_path
+from gammapy.utils.provenance import provenance
 
 __all__ = ["Analysis"]
 
@@ -130,8 +131,6 @@ class Analysis:
             self._spectrum_extraction()
         else:  # 3d
             self._map_making()
-        else:
-            ValueError(f"Invalid dataset type: {self.config.datasets.type}")
 
     def set_models(self, models):
         """Set models on datasets.
@@ -164,7 +163,7 @@ class Analysis:
         """Read models from YAML file."""
         path = make_path(path)
         models = Models.read(path)
-        self.set_models(models)
+        self.set_models(models=models)
 
     def run_fit(self, optimize_opts=None):
         """Fitting reduced datasets to model."""
@@ -203,6 +202,7 @@ class Analysis:
         log.info("\n{}".format(self.flux_points.data.table[cols]))
 
     def update_config(self, config):
+        """Updates configuration."""
         self.config = self.config.update(config=config)
 
     def _create_geometry(self):
