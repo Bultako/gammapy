@@ -115,7 +115,7 @@ class ComputePlan:
                 self.getonefile("nb: " + self.src, "Notebook")
             self.listfiles.update(dict(parse_imagefiles(self.listfiles)))
 
-        if (self.option == "scripts" or self.modetutorials) and not self.listfiles:
+        if self.option == "scripts" or self.modetutorials:
             self.parse_scripts_yaml()
             if self.src != "":
                 self.getonefile("sc: " + self.src, "Script")
@@ -124,6 +124,21 @@ class ComputePlan:
             if self.modetutorials and not self.listfiles:
                 sys.exit()
 
+            # single compressed tar bundle
+            if not self.src:
+                # TODO: work with URL versioning
+                #
+                #
+                self.listfiles = {
+                    "bundle":
+                        {
+                            "path": self.outfolder,
+                            "url": "https://github.com/gammapy/gammapy-extra/raw/master/datasets/cta-1dc/README.md",
+                        },
+                }
+                return self.listfiles
+
+            # collection of files
             if self.release:
                 filename_datasets = "gammapy-" + self.release + "-data-index.json"
                 url = BASE_URL + "/data/" + filename_datasets
