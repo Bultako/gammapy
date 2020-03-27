@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import click
 import hashlib
-import shutil
 import tarfile
 
 log = logging.getLogger(__name__)
@@ -77,18 +76,12 @@ class DownloadDataset:
             urlpath = itempath.as_posix().replace(self.local_repo.as_posix(), "")
             filesize = os.path.getsize(itempath)
             md5 = hashmd5(itempath)
-
-            pathdest = path_temp / jsonpath
-            log.info(f"Adding {pathdest}")
-            if not pathdest.parent.is_dir():
-                pathdest.parent.mkdir(parents=True)
-            shutil.copyfile(itempath, pathdest)
-
             yield {
                 "path": jsonpath,
                 "url": self.base_url + urlpath,
                 "filesize": filesize,
                 "hashmd5": md5,
+                "itempath": str(itempath),
             }
 
 
@@ -230,6 +223,12 @@ class DownloadDatasetIndex:
 
     def make(self):
         records = list(self.make_records())
+        with tarfile.open("datasetos.tar.gz", "w:gz") as tar:
+            for rec in records:
+                for f in rec["files"]:
+                    log.info(f"Adding {f['itempath']}")
+                    tar.add(f["itempath"], arcname=f["path"])
+
         txt = json.dumps(records, indent=True)
         log.info("Writing {}".format(self.path))
         Path(self.path).write_text(txt)
@@ -255,11 +254,7 @@ def cli_all(ctx):
 @cli.command("dataset-index")
 def cli_download_dataset_index():
     """Generate dataset index JSON file and make tar file"""
-    path_temp.mkdir()
     DownloadDatasetIndex().make()
-    with tarfile.open("datasets.tar.gz", "w:gz") as tar:
-        tar.add(path_temp)
-    shutil.rmtree(path_temp, ignore_errors=True)
 
 
 if __name__ == "__main__":
