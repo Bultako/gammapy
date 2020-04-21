@@ -21,7 +21,7 @@ from gammapy.scripts.info import (
     get_info_version,
 )
 
-__all__ = ["provenance", "log_file_generation"]
+__all__ = ["provenance"]
 
 _interesting_env_vars = [
     "CONDA_DEFAULT_ENV",
