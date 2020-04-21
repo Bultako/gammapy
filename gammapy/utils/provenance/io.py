@@ -6,10 +6,10 @@ import datetime
 from pathlib import Path
 
 import yaml
+from prov.dot import prov_to_dot
 from prov.model import ProvDocument
 
 
-__all__ = ["provlist2provdoc", "provdoc2svg", "read_prov"]
 # config
 CONFIG_PATH = Path(__file__).resolve().parent / "config"
 LOGGER_FILE = CONFIG_PATH / "logger.yaml"
@@ -17,9 +17,12 @@ provconfig = yaml.safe_load(LOGGER_FILE.read_text())
 PROV_PREFIX = provconfig["PREFIX"]
 DEFAULT_NS = "id"  # "logprov"
 
+__all__ = ["provlist2provdoc", "provdoc2png", "read_prov"]
+
 
 def provlist2provdoc(provlist):
-    """ Convert a list of provenance dictionaries to a provdoc W3C PROV compatible"""
+    """Convert a list of provenance dictionaries to a provdoc W3C PROV compliant structure."""
+
     pdoc = ProvDocument()
     pdoc.set_default_namespace("param:")
     pdoc.add_namespace(DEFAULT_NS, DEFAULT_NS + ":")
@@ -81,12 +84,10 @@ def provlist2provdoc(provlist):
                 else:
                     agent = pdoc.agent(agent_id)
                     records[agent_id] = agent
-                #act.wasAssociatedWith(agent, attributes={"prov:role": "Creator"})
+                # act.wasAssociatedWith(agent, attributes={"prov:role": "Creator"})
             if "parameters" in provdict:
                 params_record = provdict.pop("parameters")
-                params = {
-                    k: str(params_record[k]) for k in params_record
-                }
+                params = {k: str(params_record[k]) for k in params_record}
                 par = pdoc.entity(act_id + "_parameters", other_attributes=params)
                 par.add_attributes({"prov:type": "Parameters"})
                 par.add_attributes({"prov:label": "Parameters"})
@@ -181,35 +182,33 @@ def provlist2provdoc(provlist):
     return pdoc
 
 
-def provdoc2svg(provdoc, filename):
-    from prov.dot import prov_to_dot
-    from pydotplus.graphviz import InvocationException
+def provdoc2png(provdoc, filename):
+    """Create a graph of a provenance workflow session."""
 
-    try:
-        dot = prov_to_dot(
-            provdoc,
-            use_labels=True,
-            show_element_attributes=True,
-            show_relation_attributes=True,
-        )
-        svg_content = dot.create(format="svg")
-    except InvocationException as e:
-        svg_content = ""
-        print(f"problem while creating svg content: {repr(e)}")
+    dot = prov_to_dot(
+        provdoc,
+        use_labels=True,
+        show_element_attributes=True,
+        show_relation_attributes=False,
+    )
+    content = dot.create(format="png")
     with open(filename, "wb") as f:
-        f.write(svg_content)
+        f.write(content)
 
 
-def read_prov(logname="prov.log", start=None, end=None):
-    """ Read a list of provenance dictionaries from the log"""
+def read_prov(filename="prov.log", start=None, end=None):
+    """Read a list of provenance dictionaries from the logfile."""
+
+    start_dt = None
+    end_dt = None
     if start:
         start_dt = datetime.datetime.fromisoformat(start)
     if end:
         end_dt = datetime.datetime.fromisoformat(end)
     prov_list = []
-    with open(logname, "r") as f:
-        for l in f.readlines():
-            ll = l.split(PROV_PREFIX)
+    with open(filename, "r") as f:
+        for line in f.readlines():
+            ll = line.split(PROV_PREFIX)
             if len(ll) >= 2:
                 prov_str = ll.pop()
                 prov_dt = datetime.datetime.fromisoformat(ll.pop())
