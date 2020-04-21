@@ -43,14 +43,16 @@ SCHEMA_FILE = CONFIG_PATH / "definition.yaml"
 LOGGER_FILE = CONFIG_PATH / "logger.yaml"
 definition = yaml.safe_load(SCHEMA_FILE.read_text())
 provconfig = yaml.safe_load(LOGGER_FILE.read_text())
-SUPPORTED_HASH_TYPE = "md5"
 logger = logging.getLogger("provLogger")
 LOG_FILENAME = provconfig["handlers"]["provHandler"]["filename"]
 PROV_PREFIX = provconfig["PREFIX"]
+SUPPORTED_HASH_METHOD = ["md5"]
+SUPPORTED_HASH_BUFFER = ["content", "path"]
 
 # global variables
-sessions = []
+sessions = set()
 traced_entities = {}
+
 
 def setup_logging():
     """Setup logging configuration."""
@@ -138,34 +140,49 @@ def get_hash_method():
     """Helper function that returns hash method used."""
 
     try:
-        method = provconfig["HASH_TYPE"]
-    except:
+        method = provconfig["HASH_METHOD"]
+    except KeyError:
         method = "md5"
-    if method != SUPPORTED_HASH_TYPE:
-        logger.warning(f"Hash method {method} not supported")
-        method = "Full path"
+    if method not in SUPPORTED_HASH_METHOD:
+        logger.warning(f"Hash method {method} not supported.")
+        method = "md5"
     return method
 
 
-def get_file_hash(path):
+def get_hash_buffer():
+    """Helper function that returns buffer content to be used in hash method used."""
+
+    try:
+        buffer = provconfig["HASH_TYPE"]
+    except KeyError:
+        buffer = "path"
+    if buffer not in SUPPORTED_HASH_BUFFER:
+        logger.warning(f"Hash buffer {buffer} not supported.")
+        buffer = "path"
+    return buffer
+
+
+def get_file_hash(str_path, buffer=get_hash_buffer(), method=get_hash_method()):
     """Helper function that returns hash of the content of a file."""
 
-    method = get_hash_method()
-    if method == "Full path":
-        return full_path
     full_path = Path(str_path)
 
     if full_path.is_file():
-        block_size = 65536
         hash_func = getattr(hashlib, method)()
-        with open(full_path, "rb") as f:
-            buffer = f.read(block_size)
-            while len(buffer) > 0:
-                hash_func.update(buffer)
-                buffer = f.read(block_size)
-        file_hash = hash_func.hexdigest()
-        logger.debug(f"File entity {path} has {method} hash {file_hash}")
-        return file_hash
+        if buffer == "content":
+            block_size = 65536
+            with open(full_path, "rb") as f:
+                buf = f.read(block_size)
+                while len(buf) > 0:
+                    hash_func.update(buf)
+                    buf = f.read(block_size)
+            file_hash = hash_func.hexdigest()
+            logger.debug(f"File entity {str_path} has {method} hash {file_hash}")
+            return file_hash
+        elif "path":
+            hash_func.update(str(full_path).encode())
+            hash_path = hash_func.hexdigest()
+            return hash_path
     else:
         logger.warning(f"File entity {str_path} not found")
         return str_path
@@ -275,13 +292,16 @@ def get_item_properties(nested, item):
             try:
                 setattr(value, "entity_version", 1)
             except AttributeError as ex:
-                logger.warning(f"{repr(ex)} for {value}")
+                logger.warning(f"{ex} for {value}")
     if value and "id" not in properties:
         properties["id"] = get_entity_id(value, item)
-        if "File" in entity_type and properties["id"] != value:
-            method = get_hash_method()
-            properties["hash"] = properties["id"]
-            properties["hash_type"] = method
+        if "File" in entity_type:
+            properties["filepath"] = value
+            if properties["id"] != value:
+                method = get_hash_method()
+                properties["hash"] = properties["id"]
+                properties["hash_type"] = method
+
     if entity_name:
         properties["name"] = entity_name
         for attr in ["type", "contentType"]:
