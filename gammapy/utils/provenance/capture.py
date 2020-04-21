@@ -11,6 +11,7 @@ import sys
 import uuid
 from functools import wraps
 from pathlib import Path
+
 import psutil
 import yaml
 # gammapy specific
@@ -42,10 +43,10 @@ SCHEMA_FILE = CONFIG_PATH / "definition.yaml"
 LOGGER_FILE = CONFIG_PATH / "logger.yaml"
 definition = yaml.safe_load(SCHEMA_FILE.read_text())
 provconfig = yaml.safe_load(LOGGER_FILE.read_text())
-logger = logging.getLogger('provLogger')
-
-PROV_PREFIX = "_PROV_"
 SUPPORTED_HASH_TYPE = "md5"
+logger = logging.getLogger("provLogger")
+LOG_FILENAME = provconfig["handlers"]["provHandler"]["filename"]
+PROV_PREFIX = provconfig["PREFIX"]
 
 # global variables
 sessions = []
@@ -57,13 +58,13 @@ def setup_logging():
     try:
         logging.config.dictConfig(provconfig)
     except Exception as ex:
-        print(str(ex))
-        print('Failed to set up the logger.')
+        print(ex)
+        print("Failed to set up the logger.")
         logging.basicConfig(level="INFO")
 
 
 def provenance(cls):
-    """A function decorator which decorates the methods with trace function."""
+    """A function decorator which decorates the methods of a class with trace function."""
 
     setup_logging()
     for attr in cls.__dict__:
@@ -73,7 +74,7 @@ def provenance(cls):
 
 
 def trace(func):
-    """A decorator which tracks provenance info."""
+    """Trace and capture provenance info inside a method /function."""
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -150,9 +151,10 @@ def get_file_hash(path):
     """Helper function that returns hash of the content of a file."""
 
     method = get_hash_method()
-    full_path = Path(os.path.expandvars(path))
     if method == "Full path":
         return full_path
+    full_path = Path(str_path)
+
     if full_path.is_file():
         block_size = 65536
         hash_func = getattr(hashlib, method)()
@@ -165,8 +167,8 @@ def get_file_hash(path):
         logger.debug(f"File entity {path} has {method} hash {file_hash}")
         return file_hash
     else:
-        logger.warning(f"File entity {path} not found")
-        return path
+        logger.warning(f"File entity {str_path} not found")
+        return str_path
 
 
 def get_entity_id(value, item):
@@ -176,14 +178,14 @@ def get_entity_id(value, item):
         entity_name = item["entityName"]
         entity_type = definition["entities"][entity_name]["type"]
     except Exception as ex:
-        logger.warning(f"{repr(ex)} in {item}")
+        logger.warning(f"{ex} in {item}")
         entity_name = ""
         entity_type = ""
 
     if entity_type == "FileCollection":
         filename = value
         index = definition["entities"][entity_name].get("index", "")
-        if Path(os.path.expandvars(value)).is_dir() and index:
+        if Path(value).is_dir() and index:
             filename = Path(value) / index
         return get_file_hash(filename)
     if entity_type == "File":
@@ -195,7 +197,7 @@ def get_entity_id(value, item):
             entity_id += getattr(value, "entity_version")
         return entity_id
     except TypeError:
-        # rk: two different objects may use the same memory address
+        # remark: two different objects may use the same memory address
         # so use hash(entity_name) to avoid issues
         return abs(id(value) + hash(entity_name))
 
@@ -246,7 +248,7 @@ def get_item_properties(nested, item):
         entity_name = item["entityName"]
         entity_type = definition["entities"][entity_name]["type"]
     except Exception as ex:
-        logger.warning(f"{repr(ex)} in {item}")
+        logger.warning(f"{ex} in {item}")
         entity_name = ""
         entity_type = ""
     value = ""
@@ -264,7 +266,7 @@ def get_item_properties(nested, item):
     if not value and "location" in properties:
         value = properties["location"]
     if "overwrite" in item:
-        # Add or increment entity_version to make value a different entity
+        # add or increment entity_version to make value a different entity
         if hasattr(value, "entity_version"):
             version = getattr(value, "entity_version")
             version += 1
@@ -303,7 +305,7 @@ def log_session(class_instance, start):
     class_name = class_instance.__class__.__name__
     session_name = f"{module_name}.{class_name}"
     if session_id not in sessions:
-        sessions.append(session_id)
+        sessions.add(session_id)
         system = get_system_provenance()
         log_record = {
             "session_id": session_id,
@@ -387,14 +389,14 @@ def get_usage_records(class_instance, activity, activity_id):
         props = get_item_properties(class_instance, item)
         if "id" in props:
             entity_id = props.pop("id")
-            # Record usage
+            # record usage
             log_record = {
                 "activity_id": activity_id,
                 "used_id": entity_id,
             }
             if "role" in item:
                 log_record.update({"used_role": item["role"]})
-            # Record entity
+            # record entity
             log_record_ent = {
                 "entity_id": entity_id,
             }
@@ -415,7 +417,7 @@ def log_generation(class_instance, activity, activity_id):
         props = get_item_properties(class_instance, item)
         if "id" in props:
             entity_id = props.pop("id")
-            # Record generation
+            # record generation
             if "value" in item:
                 traced_entities[item["value"]] = (entity_id, item)
             log_record = {
@@ -424,7 +426,7 @@ def log_generation(class_instance, activity, activity_id):
             }
             if "role" in item:
                 log_record.update({"generated_role": item["role"]})
-            # Record entity
+            # record entity
             log_record_ent = {
                 "entity_id": entity_id,
             }
@@ -451,12 +453,12 @@ def log_members(entity_id, subitem, class_instance):
         props = get_item_properties(member, subitem)
         if "id" in props:
             mem_id = props.pop("id")
-            # Record membership
+            # record membership
             log_record = {
                 "entity_id": entity_id,
                 "member_id": mem_id,
             }
-            # Record entity
+            # record entity
             log_record_ent = {
                 "entity_id": mem_id,
             }
@@ -479,12 +481,12 @@ def log_progenitors(entity_id, subitem, class_instance):
         props = get_item_properties(entity, subitem)
         if "id" in props:
             progen_id = props.pop("id")
-            # Record progenitor link
+            # record progenitor link
             log_record = {
                 "entity_id": entity_id,
                 "progenitor_id": progen_id,
             }
-            # Record entity
+            # record entity
             log_record_ent = {
                 "entity_id": progen_id,
             }
@@ -494,19 +496,22 @@ def log_progenitors(entity_id, subitem, class_instance):
             log_prov_info(log_record)
 
 
-def log_file_generation(file_path, entity_name="", used=[], role="", activity_name=""):
-    # get file properties
-    if os.path.isfile(file_path):
+def log_file_generation(str_path, entity_name="", used=None, role="", activity_name=""):
+    """Log properties of a generated file."""
+
+    if used is None:
+        used = []
+    if Path(str_path).isfile():
         method = get_hash_method()
         item = dict(
-            file_path=file_path,
+            file_path=str_path,
             entityName=entity_name,
         )
-        entity_id = get_entity_id(file_path, item)
+        entity_id = get_entity_id(str_path, item)
         log_record = {
             "entity_id": entity_id,
             "name": entity_name,
-            "location": file_path,
+            "location": str_path,
             "hash": entity_id,
             "hash_type": method,
         }
@@ -542,9 +547,9 @@ def log_file_generation(file_path, entity_name="", used=[], role="", activity_na
                 log_prov_info(log_record)
 
 
-# ctapipe inherited code starts here
-
-
+# ctapipe inherited code
+#
+#
 def get_system_provenance():
     """Return JSON string containing provenance for all things that are fixed during the runtime."""
 
@@ -589,22 +594,3 @@ def get_env_vars():
     for var in _interesting_env_vars:
         envvars[var] = os.getenv(var, None)
     return envvars
-
-
-def _sample_cpu_and_memory():
-    # times = np.asarray(psutil.cpu_times(percpu=True))
-    # mem = psutil.virtual_memory()
-
-    return dict(
-        time_utc=datetime.datetime.utcnow().isoformat(),
-        # memory=dict(total=mem.total,
-        #             inactive=mem.inactive,
-        #             available=mem.available,
-        #             free=mem.free,
-        #             wired=mem.wired),
-        # cpu=dict(ncpu=psutil.cpu_count(),
-        #          user=list(times[:, 0]),
-        #          nice=list(times[:, 1]),
-        #          system=list(times[:, 2]),
-        #          idle=list(times[:, 3])),
-    )

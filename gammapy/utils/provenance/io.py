@@ -3,14 +3,19 @@ Provenance i/o conversion functions
 """
 
 import datetime
+from pathlib import Path
+
 import yaml
 from prov.model import ProvDocument
 
-# TODO remove
-PROV_PREFIX = "_PROV_"
-DEFAULT_NS = "id"           # "logprov"
 
 __all__ = ["provlist2provdoc", "provdoc2svg", "read_prov"]
+# config
+CONFIG_PATH = Path(__file__).resolve().parent / "config"
+LOGGER_FILE = CONFIG_PATH / "logger.yaml"
+provconfig = yaml.safe_load(LOGGER_FILE.read_text())
+PROV_PREFIX = provconfig["PREFIX"]
+DEFAULT_NS = "id"  # "logprov"
 
 
 def provlist2provdoc(provlist):
